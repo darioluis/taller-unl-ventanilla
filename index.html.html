@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es-EC">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Ventanilla — Taller IA y agentes inteligentes (UNL)</title>
+<!--
+  LA VENTANILLA — herramienta didáctica del Taller "IA y agentes inteligentes" (UNL, Educación Continua)
+  Facilitador: Ing. Luis Darío Sinche Cueva
+
+  Qué hace: envía UNA petición a la API de Gemini desde el navegador de quien la usa y muestra,
+  lado a lado, lo que se envía y lo que vuelve.
+
+  Qué NO hace:
+   - No guarda la llave (ni en localStorage, ni en cookies, ni en ningún lado).
+   - No tiene servidor propio ni envía datos a nadie. La única dirección a la que se conecta es la de
+     la API de Gemini, en Google (búsquela en este archivo con el nombre API_BASE: aparece una sola vez).
+   - No carga scripts, fuentes ni imágenes externas.
+
+  Cómo comprobarlo: F12 -> pestaña Network -> pulse "Enviar petición" -> verá una sola petición, a Google.
+-->
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --ink:#14213d; --muted:#57607a; --line:#d6dbe6;
+    --ok:#0a7d3b; --okbg:#e3f5ea; --warn:#8a5200; --warnbg:#fff2d9; --err:#b3261e; --errbg:#fdeceb;
+    --accent:#1d4ed8; --accentink:#ffffff; --code:#0f172a; --codeink:#e6edf7; --tag:#e8edf8; --tagink:#25396f;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0e1320; --card:#161d2e; --ink:#e9eefb; --muted:#9ba6c0; --line:#2a3552;
+      --ok:#5fd68f; --okbg:#0f2b1c; --warn:#ffc266; --warnbg:#33260a; --err:#ff8a80; --errbg:#3a1614;
+      --accent:#7aa2ff; --accentink:#0b1226; --code:#0a0f1c; --codeink:#e6edf7; --tag:#22304f; --tagink:#b9c9ff;
+    }
+  }
+  *{box-sizing:border-box}
+  html{font-size:18px}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.45}
+  header{padding:18px 22px 6px;max-width:1280px;margin:0 auto}
+  h1{margin:0 0 4px;font-size:1.6rem}
+  .sub{color:var(--muted);margin:0}
+  .aviso{margin:12px 0 0;padding:10px 14px;border-radius:10px;background:var(--tag);color:var(--tagink);font-size:.85rem}
+  main{max-width:1280px;margin:0 auto;padding:10px 22px 40px;display:grid;gap:16px;grid-template-columns:1fr}
+  @media (min-width: 980px){ main{grid-template-columns:1fr 1fr} .full{grid-column:1 / -1} }
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card h2{margin:0 0 10px;font-size:1.05rem}
+  label{display:block;font-weight:600;margin:10px 0 4px;font-size:.9rem}
+  input[type=password],input[type=text],textarea{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+  textarea{min-height:96px;resize:vertical}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .row small{color:var(--muted)}
+  button{font:inherit;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:10px 16px;border-radius:10px;cursor:pointer}
+  button.primary{background:var(--accent);color:var(--accentink);border-color:var(--accent);font-weight:700;font-size:1.05rem;padding:12px 22px}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  .tag{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:var(--tag);color:var(--tagink);padding:2px 8px;border-radius:999px;margin:10px 0 4px}
+  pre{margin:0;background:var(--code);color:var(--codeink);padding:12px 14px;border-radius:10px;overflow:auto;font-size:.8rem;line-height:1.4;white-space:pre-wrap;word-break:break-word;max-height:340px}
+  .estado{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  .badge{font-weight:800;font-size:1.5rem;padding:4px 14px;border-radius:10px}
+  .badge.ok{background:var(--okbg);color:var(--ok)} .badge.warn{background:var(--warnbg);color:var(--warn)} .badge.err{background:var(--errbg);color:var(--err)} .badge.wait{background:var(--tag);color:var(--tagink)}
+  .explica{padding:10px 12px;border-radius:10px;margin:6px 0 4px;font-size:.92rem}
+  .explica.ok{background:var(--okbg)} .explica.warn{background:var(--warnbg)} .explica.err{background:var(--errbg)}
+  .respuesta{white-space:pre-wrap;border-left:4px solid var(--accent);padding:6px 12px;margin:6px 0;background:var(--bg);border-radius:0 8px 8px 0;font-size:.95rem}
+  details{margin-top:10px} summary{cursor:pointer;font-weight:600}
+  .vacio{color:var(--muted);font-style:italic}
+  .mini{font-size:.82rem;color:var(--muted);margin:6px 0 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>La Ventanilla</h1>
+  <p class="sub">Aquí usted envía una petición a la API de Gemini y ve, sin adornos, lo que va y lo que vuelve.</p>
+  <p class="aviso"><strong>Su llave se queda en este navegador.</strong> Esta página no la guarda ni la envía a nadie, salvo a Google.
+  Puede comprobarlo usted mismo: pulse F12, abra la pestaña «Network» y envíe una petición.
+  Regla general: nunca pegue una llave en una página que no puede auditar.</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. Sus datos</h2>
+    <label for="llave">Su llave de API (la que copió de Google AI Studio)</label>
+    <input id="llave" type="password" autocomplete="off" spellcheck="false" placeholder="Pegue aquí su llave">
+    <div class="row"><label style="font-weight:400;margin:6px 0 0"><input id="ver" type="checkbox"> Mostrar la llave</label></div>
+
+    <label for="modelo">Modelo (es una palabra que usted puede cambiar)</label>
+    <input id="modelo" type="text" list="modelos" value="gemini-2.5-flash" spellcheck="false" autocomplete="off">
+    <datalist id="modelos">
+      <option value="gemini-2.5-flash"></option>
+      <option value="gemini-2.5-flash-lite"></option>
+      <option value="gemini-3.8-flash"></option>
+    </datalist>
+
+    <h2 style="margin-top:16px">2. Su pregunta</h2>
+    <label for="pregunta">Lo que le va a pedir a la IA</label>
+    <textarea id="pregunta">Explícame en tres frases qué es una API, usando una analogía de la vida cotidiana.</textarea>
+
+    <div class="row" style="margin-top:14px">
+      <button id="enviar" class="primary" type="button">Enviar petición</button>
+      <button id="listar" type="button">Ver modelos disponibles (GET)</button>
+    </div>
+
+    <details>
+      <summary>Romper a propósito (así se aprende)</summary>
+      <p class="mini">Cada botón envía una petición con un error puesto adrede. Mire el código y el mensaje que devuelve Google.</p>
+      <div class="row" style="margin-top:8px">
+        <button id="rompe-llave" type="button">Llave equivocada</button>
+        <button id="rompe-modelo" type="button">Modelo inexistente</button>
+        <button id="rompe-vacio" type="button">Pregunta vacía</button>
+      </div>
+      <p class="mini" style="margin-top:10px"><strong>Opcional:</strong> la ráfaga envía 15 peticiones seguidas para provocar un error 429 (cuota).
+      Puede dejar su llave sin respuesta durante un minuto.</p>
+      <div class="row"><button id="rompe-rafaga" type="button">Ráfaga de 15</button></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Lo que se envía</h2>
+    <div class="tag">Método y dirección</div>
+    <pre id="env-url"></pre>
+    <div class="tag">Encabezados (aquí viaja la llave)</div>
+    <pre id="env-head"></pre>
+    <div class="tag">Cuerpo (la «carta», en formato JSON)</div>
+    <pre id="env-body"></pre>
+    <details>
+      <summary>Cómo lo vería un programador (comando curl)</summary>
+      <pre id="env-curl" style="margin-top:8px"></pre>
+      <p class="mini">Es exactamente la misma petición. La llave se representa con una variable para no dejarla a la vista.</p>
+    </details>
+  </section>
+
+  <section class="card full" aria-live="polite">
+    <h2>Lo que vuelve</h2>
+    <div id="vuelve"><p class="vacio">Todavía no ha enviado ninguna petición. Pulse «Enviar petición».</p></div>
+  </section>
+</main>
+
+<script>
+(function(){
+  "use strict";
+  var API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+  var $ = function(id){ return document.getElementById(id); };
+  var ocupado = false;
+
+  /* ---------- utilidades ---------- */
+  function limpiaLlave(v){ return String(v||"").replace(/\s+/g,""); }
+  function limpiaModelo(v){ return String(v||"").trim().replace(/^models\//,""); }
+  function enmascara(k){
+    if(!k) return "(vacía: pegue su llave en el campo 1)";
+    if(k.length <= 6) return "••••••";
+    return "••••••••••••" + k.slice(-4);
+  }
+  function jsonBonito(o){ return JSON.stringify(o, null, 2); }
+
+  /* ---------- construir la petición ---------- */
+  function construye(op){
+    op = op || {};
+    var llaveOriginal = $("llave").value;
+    var llave = ("llave" in op) ? op.llave : limpiaLlave(llaveOriginal);
+    var modelo = ("modelo" in op) ? op.modelo : limpiaModelo($("modelo").value);
+    var texto = ("texto" in op) ? op.texto : $("pregunta").value;
+    if(op.listar){
+      return { metodo:"GET", url: API_BASE + "/models", llave: llave, cuerpo: null, modelo: modelo };
+    }
+    return {
+      metodo:"POST",
+      url: API_BASE + "/models/" + modelo + ":generateContent",
+      llave: llave,
+      cuerpo: { contents: [ { parts: [ { text: texto } ] } ] },
+      modelo: modelo
+    };
+  }
+
+  /* ---------- panel «lo que se envía» ---------- */
+  function pintaEnvio(){
+    var r = construye();
+    $("env-url").textContent = r.metodo + " " + r.url;
+    $("env-head").textContent = (r.cuerpo ? "Content-Type: application/json\n" : "") + "x-goog-api-key: " + enmascara(r.llave);
+    $("env-body").textContent = r.cuerpo ? jsonBonito(r.cuerpo) : "(este tipo de petición no lleva cuerpo)";
+    var curl = "curl -X " + r.metodo + " \"" + r.url + "\" \\\n  -H \"x-goog-api-key: $GEMINI_API_KEY\"";
+    if(r.cuerpo){
+      curl += " \\\n  -H \"Content-Type: application/json\" \\\n  -d '" + JSON.stringify(r.cuerpo) + "'";
+    }
+    $("env-curl").textContent = curl;
+  }
+
+  /* ---------- explicación en español de cada código ---------- */
+  function mensajeGoogle(datos){
+    try{ if(datos && datos.error && datos.error.message) return String(datos.error.message); }catch(e){}
+    return "";
+  }
+  function explica(status, datos){
+    var m = mensajeGoogle(datos), ml = m.toLowerCase();
+    if(status >= 200 && status < 300) return { clase:"ok", titulo:"Todo salió bien.", texto:"El código 200 significa «entendí su petición y aquí está la respuesta»." };
+    if(status === 400){
+      if(ml.indexOf("api key not valid") >= 0 || ml.indexOf("api_key_invalid") >= 0)
+        return { clase:"warn", titulo:"La llave no es válida.", texto:"Puede estar mal copiada, incompleta, revocada, o no ser de Google AI Studio. Cópiela de nuevo desde la página de llaves." };
+      return { clase:"warn", titulo:"La petición está mal armada.", texto:"El servidor la recibió pero no la pudo entender (por ejemplo, un cuerpo vacío o incompleto). Es un error de quien envía, no del servicio." };
+    }
+    if(status === 401) return { clase:"warn", titulo:"No autenticado.", texto:"El servicio no pudo comprobar quién es usted. Revise la llave." };
+    if(status === 403) return { clase:"warn", titulo:"No tiene permiso.", texto:"La llave existe pero no puede hacer esto: puede que el servicio no esté habilitado para su cuenta, o que su organización lo bloquee. Si usa una cuenta institucional, pruebe con una cuenta personal de Gmail." };
+    if(status === 404) return { clase:"warn", titulo:"No existe lo que pidió.", texto:"Casi siempre es el nombre del modelo mal escrito o un modelo que ya no está disponible. Pulse «Ver modelos disponibles» para ver los nombres vigentes." };
+    if(status === 429){
+      if(ml.indexOf("limit: 0") >= 0)
+        return { clase:"warn", titulo:"Ese modelo no tiene cuota gratuita para su cuenta.", texto:"El mensaje dice «limit: 0». Cambie de modelo (por ejemplo, gemini-2.5-flash-lite) y vuelva a enviar." };
+      return { clase:"warn", titulo:"Demasiadas peticiones (cuota agotada).", texto:"Los servicios gratuitos limitan cuántas peticiones puede hacer por minuto y por día. No lo bloquearon: espere un minuto o cambie de modelo. La cuota se cuenta por proyecto de Google, no por persona." };
+    }
+    if(status >= 500) return { clase:"err", titulo:"Problema del lado del servicio.", texto:"No es culpa de su petición. Espere un minuto y reintente. Si sigue fallando, es una caída de Google y no hay nada que corregir de su lado." };
+    return { clase:"warn", titulo:"Respuesta inesperada.", texto:"Revise el JSON de abajo: casi siempre Google explica ahí qué pasó." };
+  }
+
+  function extraeTexto(datos){
+    try{
+      var partes = datos.candidates[0].content.parts;
+      var t = partes.map(function(p){ return p.text; }).filter(function(x){ return typeof x === "string"; }).join("\n");
+      return t || "";
+    }catch(e){ return ""; }
+  }
+
+  /* ---------- panel «lo que vuelve» ---------- */
+  function limpia(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+  function nodo(tag, clase, texto){ var e = document.createElement(tag); if(clase) e.className = clase; if(texto !== undefined) e.textContent = texto; return e; }
+
+  function pintaEspera(){
+    var c = $("vuelve"); limpia(c);
+    var d = nodo("div","estado"); d.appendChild(nodo("span","badge wait","…")); d.appendChild(nodo("span","", "Esperando la respuesta de Google"));
+    c.appendChild(d);
+  }
+  function pintaRespuesta(status, ms, datos, crudo, tipo){
+    var c = $("vuelve"); limpia(c);
+    var ex = explica(status, datos);
+    var est = nodo("div","estado");
+    est.appendChild(nodo("span","badge " + ex.clase, String(status)));
+    est.appendChild(nodo("span","", ms + " ms"));
+    c.appendChild(est);
+    var e = nodo("div","explica " + ex.clase);
+    e.appendChild(nodo("strong","", ex.titulo + " "));
+    e.appendChild(document.createTextNode(ex.texto));
+    c.appendChild(e);
+    var mg = mensajeGoogle(datos);
+    if(mg && status >= 400){
+      c.appendChild(nodo("div","tag","Lo que dice Google (aprenda a leerlo)"));
+      c.appendChild(nodo("pre","",mg));
+    }
+    if(status >= 200 && status < 300){
+      if(tipo === "modelos"){
+        var nombres = [];
+        try{ (datos.models||[]).forEach(function(m){
+          var ok = (m.supportedGenerationMethods||[]).indexOf("generateContent") >= 0;
+          if(ok && m.name) nombres.push(String(m.name).replace(/^models\//,""));
+        }); }catch(e2){}
+        c.appendChild(nodo("div","tag","Modelos que aceptan generateContent (copie uno en el campo «Modelo»)"));
+        c.appendChild(nodo("div","respuesta", nombres.length ? nombres.join("\n") : "(la lista vino vacía: revise el JSON crudo)"));
+      } else {
+        var t = extraeTexto(datos);
+        c.appendChild(nodo("div","tag","Texto de la respuesta  ·  ruta en el JSON: candidates → [0] → content → parts → [0] → text"));
+        if(t) c.appendChild(nodo("div","respuesta",t));
+        else {
+          var motivo = "";
+          try{ motivo = (datos.promptFeedback && datos.promptFeedback.blockReason) ? " Motivo de bloqueo: " + datos.promptFeedback.blockReason + "." : ""; }catch(e3){}
+          c.appendChild(nodo("div","explica warn","La respuesta llegó sin texto." + motivo + " Revise el JSON crudo."));
+        }
+        if(datos && datos.usageMetadata){
+          var u = datos.usageMetadata;
+          c.appendChild(nodo("div","tag","Tokens usados (así se mide y se limita el uso)"));
+          c.appendChild(nodo("pre","", "Su pregunta:   " + (u.promptTokenCount!==undefined?u.promptTokenCount:"?") + " tokens\nLa respuesta:   " + (u.candidatesTokenCount!==undefined?u.candidatesTokenCount:"?") + " tokens\nTotal:          " + (u.totalTokenCount!==undefined?u.totalTokenCount:"?") + " tokens"));
+        }
+      }
+    }
+    var det = document.createElement("details");
+    det.appendChild(nodo("summary","","JSON crudo tal como llegó"));
+    det.appendChild(nodo("pre","", crudo || "(sin cuerpo)"));
+    c.appendChild(det);
+  }
+  function pintaRed(msg){
+    var c = $("vuelve"); limpia(c);
+    var est = nodo("div","estado");
+    est.appendChild(nodo("span","badge err","Sin respuesta"));
+    c.appendChild(est);
+    var e = nodo("div","explica err");
+    e.appendChild(nodo("strong","","No se pudo conectar con Google. "));
+    e.appendChild(document.createTextNode("Puede ser que no tenga internet, que la red de su trabajo o universidad bloquee el servicio, o que una extensión del navegador (bloqueador de anuncios, VPN) lo esté impidiendo. Detalle técnico: " + msg));
+    c.appendChild(e);
+  }
+
+  /* ---------- enviar ---------- */
+  function fetchConTiempo(r){
+    var ctl = ("AbortController" in window) ? new AbortController() : null;
+    var t = ctl ? setTimeout(function(){ ctl.abort(); }, 60000) : null;
+    var t0 = Date.now();
+    var init = { method: r.metodo, headers: { "x-goog-api-key": r.llave } };
+    if(r.cuerpo){ init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(r.cuerpo); }
+    if(ctl) init.signal = ctl.signal;
+    return fetch(r.url, init).then(function(resp){
+      return resp.text().then(function(txt){
+        if(t) clearTimeout(t);
+        var datos = null; try{ datos = JSON.parse(txt); }catch(e){}
+        return { status: resp.status, ms: Date.now() - t0, datos: datos, crudo: datos ? jsonBonito(datos) : txt };
+      });
+    }, function(err){ if(t) clearTimeout(t); throw err; });
+  }
+
+  function bloquea(v){
+    ocupado = v;
+    ["enviar","listar","rompe-llave","rompe-modelo","rompe-vacio","rompe-rafaga"].forEach(function(id){ $(id).disabled = v; });
+  }
+
+  function ejecuta(op, tipo){
+    if(ocupado) return;
+    var r = construye(op);
+    if(!r.llave && !(op && "llave" in op)){
+      var c = $("vuelve"); limpia(c);
+      var e = nodo("div","explica warn");
+      e.appendChild(nodo("strong","","Falta la llave. "));
+      e.appendChild(document.createTextNode("Pegue en el campo 1 la llave que copió de Google AI Studio."));
+      c.appendChild(e); return;
+    }
+    bloquea(true); pintaEspera();
+    fetchConTiempo(r).then(function(x){
+      pintaRespuesta(x.status, x.ms, x.datos, x.crudo, tipo);
+    }).catch(function(err){
+      pintaRed(err && err.name === "AbortError" ? "la respuesta tardó más de 60 segundos" : String(err && err.message ? err.message : err));
+    }).then(function(){ bloquea(false); });
+  }
+
+  function rafaga(){
+    if(ocupado) return;
+    var llave = limpiaLlave($("llave").value);
+    if(!llave){ ejecuta(); return; }
+    bloquea(true); pintaEspera();
+    var reqs = [], i;
+    for(i=0;i<15;i++){ reqs.push(fetchConTiempo(construye({texto:"Responde solo con la palabra: listo"})).then(function(x){ return x.status; }, function(){ return "red"; })); }
+    Promise.all(reqs).then(function(estados){
+      var cuenta = {}; estados.forEach(function(s){ cuenta[s] = (cuenta[s]||0) + 1; });
+      var c = $("vuelve"); limpia(c);
+      var hay429 = !!cuenta[429];
+      var est = nodo("div","estado");
+      est.appendChild(nodo("span","badge " + (hay429 ? "warn" : "ok"), hay429 ? "429" : "200"));
+      est.appendChild(nodo("span","","Ráfaga de 15 peticiones seguidas"));
+      c.appendChild(est);
+      var partes = Object.keys(cuenta).map(function(k){ return cuenta[k] + " × " + k; }).join("   ·   ");
+      c.appendChild(nodo("pre","", "Resultado: " + partes));
+      var e = nodo("div","explica " + (hay429 ? "warn" : "ok"));
+      e.appendChild(document.createTextNode(hay429
+        ? "Apareció el 429: superó el límite por minuto de su cuota gratuita. No es un bloqueo: espere un minuto y funciona de nuevo."
+        : "Esta vez su cuota alcanzó para las 15. Los límites gratuitos cambian según el modelo y el día; pruebe con otro modelo o con otra ráfaga."));
+      c.appendChild(e);
+    }).then(function(){ bloquea(false); });
+  }
+
+  /* ---------- eventos ---------- */
+  ["llave","modelo","pregunta"].forEach(function(id){ $(id).addEventListener("input", pintaEnvio); });
+  $("ver").addEventListener("change", function(){ $("llave").type = this.checked ? "text" : "password"; });
+  $("enviar").addEventListener("click", function(){ ejecuta(); });
+  $("listar").addEventListener("click", function(){ ejecuta({listar:true}, "modelos"); });
+  $("rompe-llave").addEventListener("click", function(){ ejecuta({llave:"llave-equivocada-123"}); });
+  $("rompe-modelo").addEventListener("click", function(){ ejecuta({modelo:"gemini-9-supermax"}); });
+  $("rompe-vacio").addEventListener("click", function(){ ejecuta({texto:""}); });
+  $("rompe-rafaga").addEventListener("click", rafaga);
+
+  pintaEnvio();
+  window.__ventanilla = { construye: construye, explica: explica, extraeTexto: extraeTexto, limpiaLlave: limpiaLlave, limpiaModelo: limpiaModelo };
+})();
+</script>
+</body>
+</html>
